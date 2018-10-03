@@ -1,0 +1,146 @@
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.lang.NullPointerException;
+import java.lang.NumberFormatException;
+import java.math.BigInteger;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+
+
+/**
+ * Reporter program. Receives encrypted UDP datagrams from Leakers.
+ *
+ * @author	Jesse Roux (jar4899)
+ */
+public class Reporter {
+	private static final int MAX_PAYLOAD_SIZE = 260;
+	private static final int MAX_CIPHERTEXT_SIZE = MAX_PAYLOAD_SIZE - 2;
+	private static String rhost;
+	private static int rport = 0;
+	private static BigInteger privateKey, modulus;
+	private static RSADecrypter decrypter;
+
+	/**
+	 * Main entrypoint for Reporter program
+	 */
+	public static void main(String[] args) throws IOException {
+		if(!parseArgs(args))
+			System.exit(1);
+
+		decrypter = new RSADecrypter(privateKey, modulus);
+
+		byte[] payload = new byte[MAX_PAYLOAD_SIZE];
+		DatagramPacket p;
+		DatagramSocket mailbox = new DatagramSocket(
+			new InetSocketAddress(rhost, rport));
+
+		// Receive messages from Leakers forever
+		while(true) {
+			p = new DatagramPacket(payload, payload.length);
+
+			try {
+				mailbox.receive(p);
+			} catch(Exception e) {
+				// Ignore exceptions when trying to receive
+				continue;
+			}
+
+			if(!processPacket(payload))
+				System.out.println("ERROR");
+		}
+	}
+
+	/**
+	 * Processes the payload of a packet. The payload is formatted as:
+	 *
+	 * 			+-----------+--------------------+
+	 *			|  length   |     ciphertext     |
+	 *			| (2 bytes) |   (<= 258 bytes)   |
+	 *			+-----------+--------------------+
+	 *
+	 * If the payload is invalid for any reason, this method returns false
+	 */
+	private static boolean processPacket(byte[] payload) {
+		try {
+			DataInputStream in = new DataInputStream(new ByteArrayInputStream(payload));
+			short size = in.readShort();
+
+			if(size < 1 || size > MAX_CIPHERTEXT_SIZE)
+				return false;
+
+			byte[] buf = new byte[size];
+			int numRead = in.read(buf, 0, size);
+
+			// Not enough bytes were read
+			if(size != numRead)
+				return false;
+
+			// Print the decrypted message
+			System.out.println(decrypter.decrypt(new BigInteger(buf).toByteArray()));
+		} catch(Exception e) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Prints the program's usage statement
+	 */
+	private static void usage() {
+		System.out.println("Usage: java Reporter <rhost> <rport> <privatekeyfile>");
+	}
+
+	/**
+	 * Parses the program's arguments. Returns true if there were no errors
+	 */
+	private static boolean parseArgs(String[] args) throws IOException {
+		if(args.length != 3) {
+			usage();
+			return false;
+		}
+
+		rhost = args[0];
+
+		try {
+			rport = Integer.parseInt(args[1]);
+		} catch(NumberFormatException e) {
+			System.out.println("Error: `rport` must be a number");
+			return false;
+		}
+
+		// Reporter mailbox port out of range
+		if(rport < 1 || rport > 65535) {
+			System.out.println("Error: `rport` must be between 1-65535");
+			return false;
+		}
+
+		// Open the private key file
+		try {
+			BufferedReader reader = new BufferedReader(
+				new FileReader(args[2]));
+
+			privateKey = new BigInteger(reader.readLine());
+			modulus = new BigInteger(reader.readLine());
+
+			reader.close();
+		} catch (FileNotFoundException e) {
+			System.out.printf("Error: Private key file '%s' does not exist\n",
+				args[2]);
+			return false;
+		} catch (NumberFormatException e) {
+			System.out.println("Error: Private key file is malformed (NaN)");
+			return false;
+		} catch (NullPointerException e) {
+			System.out.println("Error: Private key file is malformed (empty)");
+			return false;
+		}
+
+		return true;
+	}
+}

@@ -1,0 +1,60 @@
+/**
+ * Created by aidan_000 on 2/21/2018.
+ */
+import edu.rit.pj2.Task;
+import edu.rit.pj2.Loop;
+import java.util.ArrayList;
+import java.math.BigInteger;
+
+public class Goldbach{ //extends Task{
+    public static void main(final String[] args) throws Exception{
+        int n = 0;
+        try{
+            n = Integer.parseInt(args[0]);
+        }catch (NumberFormatException e){
+            System.out.println("Error: Required arguments not an int");
+            System.exit(0);
+        }
+        if(n <= 4 || n % 2 != 0){
+            System.out.println("Error: n must be greater than 4 and odd");
+            System.exit(0);
+        }
+        else{
+            ArrayList<Integer> primes = new ArrayList<Integer>();
+            int count = 0;
+            for(int i = 3; i < n; i++){
+                BigInteger prm = new BigInteger(Integer.toString(i));
+                if(i >= 3 && prm.isProbablePrime(64)) {
+                    primes.add(i);
+                }
+            }
+            int x = 0;
+            int y = primes.size()-1;
+            ArrayList<Integer> xMax = new ArrayList<Integer>();
+            ArrayList<Integer> yMax = new ArrayList<Integer>();
+           while(x <= y){
+               if(primes.get(x) + primes.get(y) == n) {
+                   count++;
+                   xMax.add(primes.get(x));
+                   yMax.add(primes.get(y));
+                   x++;
+               }
+               else if(primes.get(x) + primes.get(y) < n)
+                   x++;
+               else
+                   y--;
+            }
+            if(count == 1){
+                System.out.print("1 solution\n");
+                System.out.print(n + " = " + xMax.get(0) + " + " + yMax.get(0) + "\n");
+            }
+            else if(count > 1){
+                System.out.print(count + " solutions\n");
+                System.out.print(n + " = " + xMax.get(0) + " + " + yMax.get(0) + "\n");
+                System.out.print(n + " = " + xMax.get(xMax.size()-1) + " + " + yMax.get(yMax.size()-1) + "\n");
+            }
+            else
+                System.out.print("No solutions\n");
+        }
+    }
+}

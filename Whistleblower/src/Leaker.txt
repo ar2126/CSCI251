@@ -1,0 +1,131 @@
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.lang.NullPointerException;
+import java.lang.NumberFormatException;
+import java.math.BigInteger;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+
+
+/**
+ * Leaker program. Sends an encrypted UDP datagram to the Reporter.
+ *
+ * @author	Jesse Roux (jar4899)
+ */
+public class Leaker {
+
+	private static String rhost, lhost, message;
+	private static int rport = 0, lport = 0;
+	private static BigInteger exponent, modulus;
+
+	/**
+	 * Main entrypoint for Leaker program
+	 */
+	public static void main(String[] args) throws IOException {
+		if(!parseArgs(args))
+			System.exit(1);
+
+		RSAEncrypter encrypter = new RSAEncrypter(exponent, modulus);
+		byte[] ciphertext = encrypter.encrypt(message);
+
+		// Our mailbox
+		DatagramSocket mailbox = new DatagramSocket(
+			new InetSocketAddress(lhost, lport));
+
+		// The reporter's mailbox
+		SocketAddress reporterMailbox = new InetSocketAddress(rhost, rport);
+
+		ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+		DataOutputStream out = new DataOutputStream(byteOut);
+
+		// Write the ciphertext length followed by the ciphertext. The Reporter
+		// will read the first 4 bytes of the payload to know how long the
+		// ciphertext is
+		out.writeShort(ciphertext.length);
+		out.write(ciphertext, 0, ciphertext.length);
+		out.close();
+
+		// Send the payload to the Reporter
+		byte[] payload = byteOut.toByteArray();
+		mailbox.send(new DatagramPacket(payload, payload.length, reporterMailbox));
+	}
+
+	/**
+	 * Prints the program's usage statement
+	 */
+	private static void usage() {
+		System.out.println("Usage: java Leaker <rhost> <rport> <lhost> "
+			+ "<lport> <publickeyfile> <message>");
+	}
+
+	/**
+	 * Parses the program's arguments. Returns true if there were no errors
+	 */
+	private static boolean parseArgs(String[] args) throws IOException {
+		if(args.length != 6) {
+			usage();
+			return false;
+		}
+
+		rhost = args[0];
+
+		try {
+			rport = Integer.parseInt(args[1]);
+		} catch(NumberFormatException e) {
+			System.out.println("Error: `rport` must be a number");
+			return false;
+		}
+
+		// Reporter mailbox port out of range
+		if(rport < 1 || rport > 65535) {
+			System.out.println("Error: `rport` must be between 1-65535");
+			return false;
+		}
+
+		// Parse our mailbox
+		lhost = args[2];
+
+		try {
+			lport = Integer.parseInt(args[3]);
+		} catch(NumberFormatException e) {
+			System.out.println("Error: `lport` must be a number");
+			return false;
+		}
+
+		// Leaker mailbox port out of range
+		if(lport < 1 || lport > 65535) {
+			System.out.println("Error: `lport` must be between 1-65535");
+			return false;
+		}
+
+		// Open the public key file to extract the exponent and modulus
+		try {
+			BufferedReader reader = new BufferedReader(
+				new FileReader(args[4]));
+
+			exponent = new BigInteger(reader.readLine());
+			modulus = new BigInteger(reader.readLine());
+
+			reader.close();
+		} catch (FileNotFoundException e) {
+			System.out.printf("Error: Public key file '%s' does not exist\n",
+				args[4]);
+			return false;
+		} catch (NumberFormatException e) {
+			System.out.println("Error: Public key file is malformed (NaN)");
+			return false;
+		} catch (NullPointerException e) {
+			System.out.println("Error: Public key file is malformed (empty)");
+			return false;
+		}
+
+		message = args[5];
+		return true;
+	}
+}
