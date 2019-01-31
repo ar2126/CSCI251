@@ -16,7 +16,7 @@ public class Quadratic {
         int c;
         int x;
         int input[] = new int[4];
-        //double doublecheck[] = new double[4];
+
         if (args.length != 4) {
             System.out.println("Error: Insufficient arguments");
             System.exit(0);
